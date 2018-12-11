@@ -58,9 +58,6 @@ func GenerateKeyPair(params RsaKeyParams) (keyPair *RsaKeyPair, err error) {
 		return nil, err
 	}
 	keyPair.PublicKey = keyPair.PrivateKey.Public()
-	if err := checkPublicKey(keyPair.PublicKey); err != nil {
-		return nil, err
-	}
 
 	return keyPair, err
 }
