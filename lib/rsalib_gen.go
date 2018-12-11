@@ -7,8 +7,9 @@ import (
 )
 
 const BITS int = 2048
-const EXPONENT int = 65537
+const PUBLIC_EXP int = 65537
 
+var FERMA_NUMS = [5]int{3, 5, 17, 257, 65537}
 var BIG_ZERO = big.NewInt(0)
 var BIG_ONE = big.NewInt(1)
 
@@ -21,46 +22,65 @@ func (pubKey *PublicKey) Size() int {
 	return (pubKey.N.BitLen() + 7) / 8
 }
 
+type PrecomputedValues struct {
+	Dp   *big.Int
+	Dq   *big.Int
+	Qinv *big.Int
+}
+
 type PrivateKey struct {
 	PublicKey
-	P *big.Int
-	Q *big.Int
-	D *big.Int
+	P           *big.Int
+	Q           *big.Int
+	D           *big.Int
+	Precomputed PrecomputedValues
 }
 
 func (privKey *PrivateKey) Public() *PublicKey {
 	return &privKey.PublicKey
 }
 
-type RsaKeyPair struct {
+func (privKey *PrivateKey) Precompute() {
+	if privKey.Precomputed.Dp != nil {
+		return
+	}
+	// dp = d(mod p-1)
+	privKey.Precomputed.Dp = new(big.Int).Sub(privKey.P, BIG_ONE)
+	privKey.Precomputed.Dp.Mod(privKey.D, privKey.Precomputed.Dp)
+	// dq = d(mod q-1)
+	privKey.Precomputed.Dq = new(big.Int).Sub(privKey.Q, BIG_ONE)
+	privKey.Precomputed.Dq.Mod(privKey.D, privKey.Precomputed.Dq)
+	// qinv = q^-1(mod p)
+	privKey.Precomputed.Qinv = new(big.Int).ModInverse(privKey.Q, privKey.P)
+}
+
+type KeyPair struct {
 	PrivateKey *PrivateKey
 	PublicKey  *PublicKey
 }
 
-type RsaKeyParams struct {
-	bits int
-	exp  int
+type KeyParams struct {
+	Bits int // default is 2048
+	Exp  int // default is 65537
 }
 
-func GenerateKeyPair(params RsaKeyParams) (keyPair *RsaKeyPair, err error) {
-	var bits int = params.bits
-	var e int = params.exp
-	if bits == 0 {
-		bits = BITS
+func GenerateKeyPair(params *KeyParams) (keyPair *KeyPair, err error) {
+	var bits int = BITS
+	var e int = PUBLIC_EXP
+
+	if params != nil && params.Bits > 0 {
+		bits = params.Bits
 	}
-	if e == 0 {
-		e = EXPONENT
+	if params != nil && params.Exp > 0 {
+		e = params.Exp
 	}
 
-	keyPair = new(RsaKeyPair)
+	keyPair = new(KeyPair)
 	keyPair.PrivateKey, err = generatePrivateKey(bits, e)
 	if err != nil {
 		return nil, err
 	}
 	keyPair.PublicKey = keyPair.PrivateKey.Public()
-	if err := checkPublicKey(keyPair.PublicKey); err != nil {
-		return nil, err
-	}
 
 	return keyPair, err
 }
@@ -69,10 +89,11 @@ func generatePrivateKey(bits int, exp int) (privateKey *PrivateKey, err error) {
 	if bits < 64 {
 		return nil, errors.New("rsalib: too few bits to generate an RSA key")
 	}
-
-	if exp == 0 {
-		exp = EXPONENT
+	err = checkPublicExp(exp)
+	if err != nil {
+		return nil, err
 	}
+
 	primes := make([]*big.Int, 2)
 	e := big.NewInt(int64(exp))
 	privateKey = new(PrivateKey)
@@ -123,8 +144,7 @@ func generatePrivateKey(bits int, exp int) (privateKey *PrivateKey, err error) {
 			continue
 		}
 		// d
-		d := new(big.Int)
-		d.ModInverse(e, phi)
+		d := new(big.Int).ModInverse(e, phi)
 		// finally private key
 		if d != nil {
 			privateKey.P = primes[0]
@@ -132,11 +152,34 @@ func generatePrivateKey(bits int, exp int) (privateKey *PrivateKey, err error) {
 			privateKey.N = n
 			privateKey.D = d
 			privateKey.E = exp
+			// precomputed values for the Chinese remainder algorithm
+			privateKey.Precompute()
 			break
 		}
 	}
 
 	return privateKey, nil
+}
+
+func checkPublicExp(exp int) error {
+	if exp < 2 {
+		return errors.New("rsalib: public exponent too small")
+	}
+	if exp > 1<<31-1 {
+		return errors.New("rsalib: public exponent too large")
+	}
+
+	ok := false
+	for _, fnum := range FERMA_NUMS {
+		if fnum == exp {
+			ok = true
+		}
+	}
+	if ok != true {
+		return errors.New("rsalib: public exponent is not be in range of Ferma numbers 3, 5, 17, 257, 65537")
+	}
+
+	return nil
 }
 
 func checkPublicKey(pubKey *PublicKey) error {
