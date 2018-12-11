@@ -1,34 +1,47 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	rsalib "rsalib/lib"
 )
 
 func main() {
-	params := rsalib.RsaKeyParams{}
-	keyPair, err := rsalib.GenerateKeyPair(params)
+	params := rsalib.KeyParams{}
+	keyPair, err := rsalib.GenerateKeyPair(&params)
 	if err != nil {
-		println(err.Error())
+		fmt.Println(err.Error())
+		return
 	}
 
-	fmt.Println("keyPair =", keyPair.PrivateKey)
+	fmt.Println("RSA key pair =", keyPair.PrivateKey)
 	maxLen := keyPair.PublicKey.Size()
+	fmt.Println("\nMax text len =", maxLen*8)
 
-	fmt.Println("Max text len =", maxLen)
-	text := []byte("Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello!!!")
+	message := []byte("Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello!!!")
+	fmt.Println("\nText len =", len(message)*8)
 
-	fmt.Println("Text len =", len(text))
-	cipher, _ := rsalib.Encrypt(text, keyPair.PublicKey)
-	fmt.Println("cipher =", cipher)
+	cipher, err := rsalib.Encrypt(message, keyPair.PublicKey)
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("\ncipher =", cipher)
+	}
 
-	plaintext, _ := rsalib.Decrypt(cipher, keyPair.PrivateKey)
-	fmt.Println("plaintext =", string(plaintext))
+	plaintext, err := rsalib.Decrypt(cipher, keyPair.PrivateKey)
+	if err != nil {
+		fmt.Println(err.Error())
+	} else {
+		fmt.Println("\nplaintext =", string(plaintext))
+	}
 
-	fmt.Println("Text len =", maxLen)
-	cipher, _ = rsalib.Encrypt(text[:maxLen], keyPair.PublicKey)
-	fmt.Println("cipher =", cipher)
+	message = []byte("Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! Hello, World! OK!!")
+	fmt.Println("\nText len =", len(message)*8)
+
+	cipher, _ = rsalib.Encrypt(message, keyPair.PublicKey)
+	fmt.Println("\ncipher =", cipher)
 
 	plaintext, _ = rsalib.Decrypt(cipher, keyPair.PrivateKey)
-	fmt.Println("plaintext =", string(plaintext))
+	fmt.Println("\nplaintext =", string(plaintext))
+	fmt.Println("\nIs messages equal?", bytes.Equal(message, plaintext))
 }
